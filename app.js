@@ -433,14 +433,15 @@ function reviewMarkup(review) {
   `;
 }
 
-function handleReviewSubmit(event) {
+async function handleReviewSubmit(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
   if ((data.reason || "").trim().length < 15) {
     showToast("Alasan penilaian minimal 15 karakter.");
     return;
   }
-  store.reviews.unshift({
+
+  const review = {
     id: createId(),
     programId: activeProgramId,
     name: cleanText(data.name) || "Anonim",
@@ -448,29 +449,52 @@ function handleReviewSubmit(event) {
     rating: Number(data.rating),
     reason: cleanText(data.reason),
     createdAt: Date.now(),
-  });
+  };
+
+  try {
+    const savedReview = USE_SUPABASE ? await submitReviewToSupabase(review) : review;
+    store.reviews.unshift(savedReview);
+  } catch (error) {
+    showToast("Ulasan belum terkirim. Periksa koneksi Supabase dan policy database.");
+    return;
+  }
+
+  event.currentTarget.reset();
   save();
   renderAll();
   renderProgramDetail();
   showToast("Terima kasih. Penilaianmu sangat membantu kami meningkatkan kualitas Program Kerja.");
 }
 
-function handleAspirationSubmit(event) {
+async function handleAspirationSubmit(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
   if ((data.body || "").trim().length < 30) {
     showToast("Isi aspirasi minimal 30 karakter.");
     return;
   }
-  store.aspirations.unshift({
+
+  const aspiration = {
     id: createId(),
     name: cleanText(data.name) || "Anonim",
     className: cleanText(data.className),
     role: data.role,
     category: data.role,
+    recipient: data.recipient,
     body: cleanText(data.body),
     createdAt: Date.now(),
-  });
+  };
+
+  try {
+    const savedAspiration = USE_SUPABASE
+      ? await submitAspirationToSupabase(aspiration)
+      : aspiration;
+    store.aspirations.unshift(savedAspiration);
+  } catch (error) {
+    showToast("Aspirasi belum terkirim. Periksa koneksi Supabase dan policy database.");
+    return;
+  }
+
   event.currentTarget.reset();
   save();
   renderAll();
@@ -484,7 +508,7 @@ function renderAspirations() {
       (item) => `
       <article class="aspiration-item">
         <span class="category-pill">${item.role || item.category || "Siswa"}</span>
-        <h3>Aspirasi dari ${item.role || item.category || "Siswa"}</h3>
+        <h3>Aspirasi untuk ${item.recipient || "Sekolah"}</h3>
         <p>${item.body}</p>
         <small>${item.name} · Kelas ${item.className} · ${relativeTime(item.createdAt)}</small>
       </article>`
@@ -817,6 +841,7 @@ async function submitAspirationToSupabase(aspiration) {
       nama: aspiration.name,
       kelas: aspiration.className,
       peran: aspiration.role,
+      recipient: aspiration.recipient,
       isi: aspiration.body,
     })
     .select("*")
@@ -860,6 +885,7 @@ function mapAspirationFromSupabase(row) {
     className: row.kelas,
     role,
     category: role,
+    recipient: row.recipient || "Sekolah",
     body: row.isi,
     createdAt: parseSupabaseDate(row.created_at),
   };
@@ -869,3 +895,4 @@ function parseSupabaseDate(value) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? Date.now() : time;
 }
+
