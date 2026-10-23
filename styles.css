@@ -741,13 +741,29 @@ textarea:focus {
   gap: 0.5rem;
 }
 
-.footer-logos span {
+.footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 58px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  padding: 0.45rem 0.7rem 0.45rem 0.45rem;
   color: var(--text);
   background: var(--surface);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.footer-logo img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.footer-logo.dark-logo img {
+  mix-blend-mode: screen;
 }
 
 .toast {
@@ -900,3 +916,22 @@ textarea:focus {
 
 .admin-reply strong { color: var(--teal); font-size: 0.82rem; }
 .admin-reply p { margin: 0; }
+
+
+/* Keep the Navakarsa asset contained in the fixed header badge. */
+.brand-mark {
+  flex: 0 0 48px;
+  min-width: 48px;
+  max-width: 48px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.brand-mark img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  max-height: 48px;
+  object-fit: cover;
+}
