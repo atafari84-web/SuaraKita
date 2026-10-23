@@ -149,6 +149,7 @@ store.aspirations = store.aspirations.map((item) => ({
 
 let activeProgramId = store.programs[0]?.id;
 let activeReviewFilter = "Semua";
+let verifiedAdminEmail = null;
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -158,6 +159,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupTheme();
   setupFilters();
   setupForms();
+  await restoreAdminSession();
   renderAll();
   route();
   await syncFromSupabase();
@@ -683,6 +685,7 @@ async function handleAdminLogin(event) {
     return;
   }
 
+  verifiedAdminEmail = authData.user.email;
   localStorage.setItem("suarasiswa:adminSession", JSON.stringify({ email: authData.user.email, loginAt: Date.now() }));
   event.currentTarget.reset();
   renderAdminGate();
@@ -692,11 +695,35 @@ async function handleAdminLogin(event) {
 
 async function handleAdminLogout() {
   if (USE_SUPABASE) await supabaseClient.auth.signOut();
+  verifiedAdminEmail = null;
   localStorage.removeItem("suarasiswa:adminSession");
   renderAdminGate();
   showToast("Admin berhasil keluar.");
 }
 
+async function restoreAdminSession() {
+  localStorage.removeItem("suarasiswa:adminSession");
+  verifiedAdminEmail = null;
+
+  if (!USE_SUPABASE) return;
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user?.email) return;
+
+  const { data: adminRow, error } = await supabaseClient
+    .from("admin")
+    .select("email")
+    .eq("email", session.user.email)
+    .maybeSingle();
+
+  if (error || !adminRow) {
+    await supabaseClient.auth.signOut();
+    return;
+  }
+
+  verifiedAdminEmail = adminRow.email;
+  localStorage.setItem("suarasiswa:adminSession", JSON.stringify({ email: adminRow.email, loginAt: Date.now() }));
+}
 function renderAdminGate() {
   const loggedIn = isAdminLoggedIn();
   $("#adminLoginPanel").classList.toggle("hidden", loggedIn);
@@ -710,7 +737,7 @@ function renderAdminGate() {
 
 function isAdminLoggedIn() {
   const session = getAdminSession();
-  return Boolean(session?.email);
+  return Boolean(session?.email && session.email === verifiedAdminEmail);
 }
 
 function getAdminSession() {
@@ -808,8 +835,8 @@ async function saveReviewModeration(id, changes) {
     save();
     renderAll();
     showToast("Balasan ulasan berhasil disimpan.");
-  } catch {
-    showToast("Balasan belum tersimpan. Periksa policy admin di Supabase.");
+  } catch (error) {
+    showToast(moderationErrorMessage(error, "Balasan"));
   }
 }
 
@@ -827,11 +854,21 @@ async function saveAspirationModeration(id, changes) {
     save();
     renderAll();
     showToast("Aspirasi berhasil diperbarui.");
-  } catch {
-    showToast("Aspirasi belum diperbarui. Periksa policy admin di Supabase.");
+  } catch (error) {
+    showToast(moderationErrorMessage(error, "Aspirasi"));
   }
 }
 
+function moderationErrorMessage(error, itemName) {
+  const detail = String(error?.message || "").toLowerCase();
+  if (detail.includes("row-level") || detail.includes("permission denied")) {
+    return "Akses admin Supabase belum aktif. Jalankan SQL policy moderasi.";
+  }
+  if (detail.includes("column")) {
+    return "Kolom moderasi belum ada. Jalankan SQL migrasi moderasi di Supabase.";
+  }
+  return `${itemName} belum diperbarui. Periksa koneksi Supabase.`;
+}
 function escapeHTML(value = "") {
   return String(value).replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -1013,6 +1050,9 @@ function parseSupabaseDate(value) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? Date.now() : time;
 }
+
+
+
 
 
 
