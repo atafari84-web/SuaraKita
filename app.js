@@ -558,6 +558,15 @@ async function handleProgramSubmit(event) {
     const index = store.programs.findIndex((program) => program.id === payload.id || program.id === savedProgram.id);
     if (index >= 0) store.programs[index] = savedProgram;
     else store.programs.unshift(savedProgram);
+
+    // Read back from Supabase immediately so the current page matches every other device.
+    if (USE_SUPABASE) {
+      store.programs = await fetchProgramsFromSupabase();
+      activeProgramId = store.programs.some((program) => program.id === activeProgramId)
+        ? activeProgramId
+        : store.programs[0]?.id;
+    }
+
     event.currentTarget.reset();
     save();
     renderAll();
@@ -1122,6 +1131,7 @@ function parseSupabaseDate(value) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? Date.now() : time;
 }
+
 
 
 
