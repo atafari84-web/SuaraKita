@@ -523,16 +523,17 @@ function renderAspirations() {
     .join("");
 }
 
-function handleProgramSubmit(event) {
+async function handleProgramSubmit(event) {
   event.preventDefault();
   if (!isAdminLoggedIn()) {
     showToast("Silakan login sebagai admin terlebih dahulu.");
     renderAdminGate();
     return;
   }
+
   const data = Object.fromEntries(new FormData(event.currentTarget));
   const payload = {
-    id: data.id || slugify(data.name),
+    id: data.id,
     name: cleanText(data.name),
     category: data.category,
     owner: cleanText(data.owner),
@@ -542,13 +543,21 @@ function handleProgramSubmit(event) {
     goal: cleanText(data.goal),
     target: cleanText(data.target),
   };
-  const index = store.programs.findIndex((program) => program.id === payload.id);
-  if (index >= 0) store.programs[index] = payload;
-  else store.programs.unshift(payload);
-  event.currentTarget.reset();
-  save();
-  renderAll();
-  showToast("Program kerja berhasil disimpan.");
+
+  try {
+    const savedProgram = USE_SUPABASE
+      ? await saveProgramToSupabase(payload)
+      : { ...payload, id: payload.id || createId() };
+    const index = store.programs.findIndex((program) => program.id === payload.id || program.id === savedProgram.id);
+    if (index >= 0) store.programs[index] = savedProgram;
+    else store.programs.unshift(savedProgram);
+    event.currentTarget.reset();
+    save();
+    renderAll();
+    showToast("Program kerja berhasil disimpan ke Supabase.");
+  } catch (error) {
+    showToast(programSaveErrorMessage(error));
+  }
 }
 
 function renderAdmin() {
@@ -1003,6 +1012,62 @@ async function submitAspirationToSupabase(aspiration) {
   return mapAspirationFromSupabase(data);
 }
 
+async function saveProgramToSupabase(program) {
+  const categoryId = await ensureCategoryInSupabase(program.category);
+  const row = {
+    nama: program.name,
+    kategori_id: categoryId,
+    penanggung_jawab: program.owner,
+    deskripsi_singkat: program.shortDescription,
+    deskripsi_lengkap: program.description,
+    tujuan: program.goal,
+    target_peserta: program.target,
+    status: program.status,
+  };
+
+  const request = isUuid(program.id)
+    ? supabaseClient.from("program_kerja").update(row).eq("id", program.id)
+    : supabaseClient.from("program_kerja").insert(row);
+  const { data, error } = await request
+    .select("*, kategori(nama)")
+    .single();
+
+  if (error) throw error;
+  return mapProgramFromSupabase(data);
+}
+
+async function ensureCategoryInSupabase(categoryName) {
+  const { data: existing, error: selectError } = await supabaseClient
+    .from("kategori")
+    .select("id")
+    .eq("nama", categoryName)
+    .maybeSingle();
+  if (selectError) throw selectError;
+  if (existing) return existing.id;
+
+  const { data, error } = await supabaseClient
+    .from("kategori")
+    .insert({ nama: categoryName })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
+}
+
+function programSaveErrorMessage(error) {
+  const detail = String(error?.message || "").toLowerCase();
+  if (detail.includes("row-level") || detail.includes("permission denied")) {
+    return "Akses admin Supabase untuk menyimpan Proker belum aktif. Jalankan SQL policy Proker.";
+  }
+  if (detail.includes("foreign key")) {
+    return "Kategori Proker belum tersedia di Supabase.";
+  }
+  return "Program kerja belum tersimpan. Periksa koneksi Supabase.";
+}
 function mapProgramFromSupabase(row) {
   return {
     id: row.id,
@@ -1050,6 +1115,7 @@ function parseSupabaseDate(value) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? Date.now() : time;
 }
+
 
 
 
