@@ -136,9 +136,10 @@ const defaultAspirations = [
 ];
 
 const store = {
-  programs: load("programs", defaultPrograms),
-  reviews: load("reviews", defaultReviews),
-  aspirations: load("aspirations", defaultAspirations),
+  // Supabase is the shared source of truth. Local data is only used when Supabase is unavailable.
+  programs: USE_SUPABASE ? [] : load("programs", defaultPrograms),
+  reviews: USE_SUPABASE ? [] : load("reviews", defaultReviews),
+  aspirations: USE_SUPABASE ? [] : load("aspirations", defaultAspirations),
 };
 
 store.aspirations = store.aspirations.map((item) => ({
@@ -176,6 +177,8 @@ function load(key, fallback) {
 }
 
 function save() {
+  // Shared data belongs in Supabase. Preserve any older browser-only data without overwriting it.
+  if (USE_SUPABASE) return;
   localStorage.setItem("suarasiswa:programs", JSON.stringify(store.programs));
   localStorage.setItem("suarasiswa:reviews", JSON.stringify(store.reviews));
   localStorage.setItem("suarasiswa:aspirations", JSON.stringify(store.aspirations));
@@ -191,9 +194,13 @@ async function syncFromSupabase() {
       fetchAspirationsFromSupabase(),
     ]);
 
-    if (programs.length) store.programs = programs;
+    // Always use the database result, including an empty table, to keep every device identical.
+    store.programs = programs;
     store.reviews = reviews;
     store.aspirations = aspirations;
+    activeProgramId = store.programs.some((program) => program.id === activeProgramId)
+      ? activeProgramId
+      : store.programs[0]?.id;
     save();
     renderAll();
 
@@ -1115,6 +1122,8 @@ function parseSupabaseDate(value) {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? Date.now() : time;
 }
+
+
 
 
 
