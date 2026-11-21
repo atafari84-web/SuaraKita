@@ -935,3 +935,32 @@ textarea:focus {
   max-height: 48px;
   object-fit: cover;
 }
+
+/* Blurred school photo background. */
+body {
+  background: transparent;
+}
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: -16px;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(246, 248, 250, 0.84), rgba(246, 248, 250, 0.9)),
+    url("background.jpg") center / cover no-repeat;
+  filter: blur(10px);
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .app-shell::before {
+  background:
+    linear-gradient(rgba(10, 16, 18, 0.84), rgba(10, 16, 18, 0.9)),
+    url("background.jpg") center / cover no-repeat;
+}
